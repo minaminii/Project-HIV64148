@@ -1,0 +1,27 @@
+thread      : 32
+# QC
+
+# Strainline
+strainline :
+  platform    : "ont"
+  mintrimlen   : 1000
+  topk        : 50
+  minoverlap  : 1000
+  miniden     : 0.99
+  minseedlen  : 3000
+  maxoh       : 30
+  iter        : 2
+  maxgd       : 0.01
+  maxld       : 0.001
+  maxco       : 5
+  min_abun    : 0.02
+  rm_mis_asm  : False
+  err_cor     : True
+
+# NanoCaller
+nanocaller:
+  reference   : "references/HIV1_genome_SubtypeB_K03455_1.fasta"
+
+# BLAST
+blast:
+  db_reference: "references/HIV1_Genomes_32Strains.fasta"

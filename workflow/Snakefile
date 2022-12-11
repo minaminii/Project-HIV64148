@@ -1,0 +1,132 @@
+configfile: "config/config.yaml"
+rule all:
+    input:       
+        strainline_result = directory("output/{dataset}/{sample_id}/strainline"),
+        reads_alignment =  "output/{dataset}/{sample_id}/alignment/reads_alignment.bam",
+        variant_calls = directory("output/{dataset}/{sample_id}/variant_calls"),
+        blast_reult = "output/{dataset}/{sample_id}/haplotype.blast.txt"
+
+rule quality_control:
+    conda: "envs/pycoQC/pycoQC.yaml"
+    input:
+        summary_file = "input/{dataset}/{sample_id}/summary.txt"
+    output:
+        qc_report_html = "output/{dataset}/{sample_id}/qc/.html",
+        qc_report_json = "output/{dataset}/{sample_id}/qc/.json"
+    shell: """
+    pycoQC \
+    -f {input.summary_file} \
+    -o {output.qc_report_html} \
+    -j {output.qc_report_json} \
+    --min_pass_qual \
+    --min_pass_len \
+    --filter_calibration \
+    --filter_duplicated \
+    --min_barcode_percent \
+    """
+
+rule strainline:
+    singularity: "envs/strainline/minamini-strainline.sif"    
+    input:
+        fastq = "input/{dataset}/{sample_id}/raw_reads.fastq"
+    output:
+        result_dir = directory("output/{dataset}/{sample_id}/strainline"),
+        corrected_reads = "output/{dataset}/{sample_id}/strainline/corrected.0.fa",
+        haplotype = "output/{dataset}/{sample_id}/strainline/haplotypes.final.fa"
+    params:
+        platform = config["strainline"]["platform"],
+        mintrimlen = config["strainline"]["mintrimlen"],
+        topk = config["strainline"]["topk"],
+        minoverlap = config["strainline"]["minoverlap"],
+        miniden = config["strainline"]["miniden"],
+        minseedlen = config["strainline"]["minseedlen"],
+        maxoh = config["strainline"]["maxoh"],
+        iter = config["strainline"]["iter"],
+        maxgd = config["strainline"]["maxgd"],
+        maxld = config["strainline"]["maxld"],
+        maxco = config["strainline"]["maxco"],
+        min_abun = config["strainline"]["min_abun"],
+        rm_mis_asm = config["strainline"]["rm_mis_asm"],
+        err_cor = config["strainline"]["err_cor"],
+    threads: config["thread"]
+    benchmark: "benchmarks/{dataset}/strainline_{sample_id}.tsv"
+    shell: """
+        /opt/Strainline/src/strainline.sh \
+        -i {input.fastq} \
+        -o {output.result_dir} \
+        -p {params.platform} \
+        --minTrimmedLen {params.mintrimlen} \
+        --topk {params.topk} \
+        --minOvlpLen {params.minoverlap} \
+        --minIdentity {params.miniden} \
+        --minSeedLen {params.minseedlen} \
+        --maxOH {params.maxoh} \
+        --iter {params.iter} \
+        --maxGD {params.maxgd} \
+        --maxLD {params.maxld} \
+        --maxCO {params.maxco} \
+        --minAbun {params.min_abun} \
+        --rmMisassembly {params.rm_mis_asm} \
+        --correctErr {params.err_cor} \
+        --threads {threads}"""
+
+rule reads_alignment:
+    conda: "envs/minimap2/minimap2.yaml"
+    input: 
+        corrected_reads = rules.strainline.output.corrected_reads
+    output: "output/{dataset}/{sample_id}/alignment/reads_alignment.bam"
+    params:
+        platform = "map-ont",
+        reference = config["nanocaller"]["reference"]
+    threads: config["thread"]
+    benchmark: "benchmarks/{dataset}/reads_alignment_{sample_id}.tsv"
+    shell: "minimap2 -ax {params.platform} {params.reference} {input.corrected_reads} | samtools sort -o {output} && samtools index {output}"
+
+rule variant_calling:
+    conda: "envs/nanocaller/nanocaller.yaml"
+    input: 
+        alignment = rules.reads_alignment.output,
+    output: directory("output/{dataset}/{sample_id}/variant_calls")
+    params:
+        platform = "ont",
+        output_prefix = "variant_calls",
+        reference = config["reference"]
+    threads: 1
+    benchmark: "benchmarks/{dataset}/variant_calling_{sample_id}.tsv"
+    shell: """
+        NanoCaller \
+        --bam {input.alignment} \
+        --ref {params.reference} \
+        --sequencing {params.platform} \
+        --output {output} \
+        --prefix {params.output_prefix} \
+        --sample {wildcards.sample_id} \
+        --cpu {threads}"""
+
+rule create_blast_db:
+    conda: "envs/blast/blast"
+    input: config["blast"]["db_reference"]
+    output: "{config[\"blast\"][\"db_reference\"]}.ndb"
+    shell: "makeblastdb -dbtype nucl -in {input} -parse_seqids"
+
+rule blast_haplotype:
+    conda: "envs/blast/blast.yaml"
+    input:
+        db = rules.create_blast_db.output,
+        reference = config["blast"]["db_reference"],
+        query = rules.strainline.output.haplotype
+    output: "output/{dataset}/{sample_id}/haplotype.blast.txt"
+    benchmark: "benchmarks/{dataset}/blast_haplotype_{sample_id}.tsv"
+    shell: "blastn -db {input.reference} -query {input.query} -out {output}"
+
+rule consensus:
+    input: 
+        strainline_dir = rules.strainline.output.result_dir,
+        reference = "references/HIV1_Genomes_32Strains.fasta"
+    output: 
+    shell: "minimap2 -ax {params.platform} {params.reference} {input.strainline_dir}/haplotypes.final.fa | samtools sort -o {output}" 
+
+rule varient_annotation:
+    input: rules.variant_calling.output
+    output: 
+    run: 

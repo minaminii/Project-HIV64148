@@ -1,5 +1,5 @@
 # Pipeline
-
+THIS PIPELINE IS UNDER DEVELOPMENT, NO FEATURES ARE GUARANTEE TO WORK AT THIS MOMENT.
 # Purpose
 
 - Dependency management and installation of tools is a time consuming process.

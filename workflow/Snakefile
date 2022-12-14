@@ -1,29 +1,27 @@
 configfile: "config/config.yaml"
+
+rule quality_control:
+    conda: "envs/NanoPack/NanoPack.yaml"
+    input: fastq = "input/{dataset}/{sample_id}/raw_reads.fastq"
+    output: directory("output/{dataset}/{sample_id}/qc")
+    params: 
+        readtype = "1D"
+    threads: config["thread"]
+    shell: """
+        NanoPlot --verbose --N50 \
+        -t {threads} \
+        --outdir {output} \
+        -p {wildcards.sample_id} \
+        --readtype {params.readtype} \
+        --fastq {input.fastq}
+    """
+
 rule all:
     input:       
         strainline_result = directory("output/{dataset}/{sample_id}/strainline"),
         reads_alignment =  "output/{dataset}/{sample_id}/alignment/reads_alignment.bam",
         variant_calls = directory("output/{dataset}/{sample_id}/variant_calls"),
         blast_reult = "output/{dataset}/{sample_id}/haplotype.blast.txt"
-
-rule quality_control:
-    conda: "envs/pycoQC/pycoQC.yaml"
-    input:
-        summary_file = "input/{dataset}/{sample_id}/summary.txt"
-    output:
-        qc_report_html = "output/{dataset}/{sample_id}/qc/.html",
-        qc_report_json = "output/{dataset}/{sample_id}/qc/.json"
-    shell: """
-    pycoQC \
-    -f {input.summary_file} \
-    -o {output.qc_report_html} \
-    -j {output.qc_report_json} \
-    --min_pass_qual \
-    --min_pass_len \
-    --filter_calibration \
-    --filter_duplicated \
-    --min_barcode_percent \
-    """
 
 rule strainline:
     singularity: "envs/strainline/minamini-strainline.sif"    

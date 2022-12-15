@@ -117,12 +117,60 @@ rule blast_haplotype:
     benchmark: "benchmarks/{dataset}/blast_haplotype_{sample_id}.tsv"
     shell: "blastn -db {input.reference} -query {input.query} -out {output}"
 
-rule consensus:
+rule contigs_asm:
+    conda: "envs/inspector/inspector.yaml"
+    input: fastq = "input/{dataset}/{sample_id}/raw_reads.fastq"
+    output: result_dir = directory("output/{dataset}/{sample_id}/consensus/contigs")
+    params:
+        genome_size = 9800
+    threads: config["thread"]
+    shell: """
+        canu -p {wildcards.sample_id} \
+        -d {output.result_dir} \
+        genomeSize={params.genome_size} \
+        -nanopore-raw {input.fastq}
+    """
+rule medaka_consensus:
+    conda: "envs/medaka/medaka.yaml"
     input: 
-        strainline_dir = rules.strainline.output.result_dir,
+        draft = "",
+        fastq = "input/{dataset}/{sample_id}/raw_reads.fastq"
+    output: 
+        result_dir = "",
+        consensus = "consensus.fasta"
+    params:
+        model = "r941_min_high_g303"
+    threads: config["thread"]
+    shell: """
+        medaka_consensus \
+        -i {input.fastq} \
+        -d {input.draft} \
+        -o {output.result_dir} \
+        -t {threads} \
+        -m {params.model}
+    """
+
+rule consensus:
+    conda: "envs/inspector/inspector.yaml"
+    input: 
+        contigs_dir = contigs_asm.output.result_dir,
+        fastq = "input/{dataset}/{sample_id}/raw_reads.fastq"
         reference = "references/HIV1_Genomes_32Strains.fasta"
     output: 
-    shell: "minimap2 -ax {params.platform} {params.reference} {input.strainline_dir}/haplotypes.final.fa | samtools sort -o {output}" 
+    params:
+        dtype = "nanopore",
+        min_contig_length = 10000,
+        pvalue = 0.05,
+    shell: """
+        inspector.py \
+        --contig \
+        --read {input.fastq} \
+        --datatype {params.dtype} \
+        --ref {input.reference} \
+        --thread {threads} \
+        --min_contig_length {params.min_contig_length} \
+        --pvalue {params.pvalue}
+    """" 
 
 rule varient_annotation:
     input: rules.variant_calling.output

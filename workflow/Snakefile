@@ -21,7 +21,8 @@ rule all:
         strainline_result = directory("output/{dataset}/{sample_id}/strainline"),
         reads_alignment =  "output/{dataset}/{sample_id}/alignment/reads_alignment.bam",
         variant_calls = directory("output/{dataset}/{sample_id}/variant_calls"),
-        blast_reult = "output/{dataset}/{sample_id}/haplotype.blast.txt"
+        blast_reult = "output/{dataset}/{sample_id}/haplotype.blast.txt",
+        consensus = "output/newsim/newsim/consensus/final/consensus.fasta"
 
 rule strainline:
     singularity: "envs/strainline/minamini-strainline.sif"    
@@ -88,7 +89,7 @@ rule variant_calling:
     params:
         platform = "ont",
         output_prefix = "variant_calls",
-        reference = config["reference"]
+        reference = config["nanocaller"]["reference"]
     threads: 1
     benchmark: "benchmarks/{dataset}/variant_calling_{sample_id}.tsv"
     shell: """
@@ -118,9 +119,11 @@ rule blast_haplotype:
     shell: "blastn -db {input.reference} -query {input.query} -out {output}"
 
 rule contigs_asm:
-    conda: "envs/inspector/inspector.yaml"
+    conda: "envs/canu/canu.yaml"
     input: fastq = "input/{dataset}/{sample_id}/raw_reads.fastq"
-    output: result_dir = directory("output/{dataset}/{sample_id}/consensus/contigs")
+    output: 
+        result_dir = directory("output/{dataset}/{sample_id}/consensus/contigs"),
+        contigs = "output/{dataset}/{sample_id}/consensus/contigs/{sample_id}.contigs.fasta"
     params:
         genome_size = 9800
     threads: config["thread"]
@@ -133,11 +136,11 @@ rule contigs_asm:
 rule medaka_consensus:
     conda: "envs/medaka/medaka.yaml"
     input: 
-        draft = "",
+        draft = rules.contigs_asm.output.contigs,
         fastq = "input/{dataset}/{sample_id}/raw_reads.fastq"
     output: 
-        result_dir = "",
-        consensus = "consensus.fasta"
+        result_dir = directory("output/{dataset}/{sample_id}/consensus/final"),
+        consensus = "output/{dataset}/{sample_id}/consensus/final/consensus.fasta"
     params:
         model = "r941_min_high_g303"
     threads: config["thread"]
@@ -150,7 +153,7 @@ rule medaka_consensus:
         -m {params.model}
     """
 
-rule consensus:
+rule inspector:
     conda: "envs/inspector/inspector.yaml"
     input: 
         contigs_dir = contigs_asm.output.result_dir,

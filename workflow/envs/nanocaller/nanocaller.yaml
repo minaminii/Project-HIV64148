@@ -15,6 +15,7 @@ dependencies:
   - attrs=22.1.0=pyh71513ae_1
   - bc=1.07.1=h7f98852_0
   - bcftools=1.16=hfe4b78e_1
+  - bedtools=2.30.0=h468198e_3
   - biopython=1.80=py38h0a891b7_0
   - blinker=1.5=pyhd8ed1ab_0
   - brotlipy=0.7.0=py38h0a891b7_1005

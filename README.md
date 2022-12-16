@@ -158,3 +158,6 @@ end
 
 - BLAST+ produces a report with cross-alignment data of all quasispecies vs database which makes the report cluttered and difficult to interprete.
 - Interactive command-line based software to control custom input/output and configuration (currently I/O require user to change their name into specified name)
+
+# Acknowledgement
+This project is supported by The Health System Research Institute, Thailand (Grant HSRI-64-148)

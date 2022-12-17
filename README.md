@@ -77,8 +77,7 @@ flowchart TD
 start([Start])
 raw_sig[Raw signal .fast5]
 raw_read[Raw reads .fastq]
-basecall_sum[Basecalls summary]
-pycoqc[[pycoQC]]
+nanoplot[[NanoPlot]]
 qc_report([fa:fa-file-lines QC report])
 long_read_ec[[Long read error correction]]
 corr_read[Corrected reads]
@@ -86,13 +85,11 @@ seed_n_cluster[Seed & Cluster]
 clus_con[Clustered contigs]
 haplotigs[Haplotigs]
 quasispecies([fa:fa-split Quasispecies])
-consensus([Consensus sequence])
-hybrid{Hybrid calls?}
-hybrid_polish{Hybrid polish?}
-polish([Polished sequences])
+draft[Draft assembly]
+consensus([Consensus assembly])
 vcf([VCF])
 annot([Annotated VCF])
-nanohiv[[NanoHIV]]
+canu[[Canu]]
 Polyposlih[[Polyposlih]]
 Medaka[[Medaka]]
 Shorah[[Shorah]]
@@ -100,6 +97,8 @@ Nanocaller[[Nanocaller]]
 snpeff[[SnpEff]]
 blast[[BLAST+]]
 iden([Quasispecies' Identities])
+indel.vcf([indel.vcf])
+snps.vcf([snps.vcf])
 
 classDef implemented fill:#B6E2A1,stroke:#333,stroke-width:1.5px
 classDef not_tested fill:#FFFBC1,stroke:#333,stroke-width:1.5px
@@ -107,38 +106,34 @@ classDef unresolved fill:#FEBE8C,stroke:#333,stroke-width:1.5px
 classDef incorrect fill:#F7A4A4,stroke:#333,stroke-width:1.5px
 
 start --> raw_sig
-raw_sig --> |Basecaller| Basecalls
-raw_sig --> nanohiv
-Basecalls --o raw_read
-Basecalls --o basecall_sum
+raw_sig --> |Basecaller| raw_read
 raw_read --> long_read_ec
-raw_read --> nanohiv
-basecall_sum --> pycoqc
+raw_read --> canu
+raw_read --> nanoplot
 subgraph snakemake/snakemake
-    subgraph pycoQC
-        pycoqc:::implemented --- qc_report:::implemented
+    qc_report:::implemented
+    subgraph NanoPack
+        nanoplot:::implemented
     end
-	subgraph NanoHIV
-        nanohiv:::not_tested --- polish
-				polish  --> hybrid_polish
-        hybrid_polish --> |Yes| Polyposlih --- consensus
-        hybrid_polish --> |No| Medaka --- consensus
+    nanoplot --- qc_report:::implemented
+	subgraph Inspector
+        canu:::implemented --- draft:::implemented
+		draft --> Medaka:::implemented --- consensus:::implemented
+    end
+    subgraph variant_caller
+        Nanocaller:::implemented--- vcf:::implemented
+        vcf --o indel.vcf:::implemented --> snpeff
+        vcf --o snps.vcf:::implemented --> snpeff
+        snpeff --- annot
     end
     subgraph minamini/strainline
+        corr_read --> Nanocaller
         long_read_ec:::implemented --> |d'accord| corr_read
         corr_read:::implemented --> seed_n_cluster
         seed_n_cluster:::implemented --> clus_con
         clus_con:::implemented --> haplotigs
         haplotigs:::implemented --> |Multiple iterations| seed_n_cluster
         haplotigs --> |Low freq haplotype removal| quasispecies:::implemented
-    end
-    subgraph variant_caller
-        corr_read --> hybrid
-        hybrid --> |Yes| Shorah --- vcf:::unresolved
-        hybrid --> |No| Nanocaller:::unresolved--- vcf
-        vcf --o indel.vcf:::incorrect --> snpeff
-        vcf --o snps.vcf:::unresolved --> snpeff
-        snpeff --- annot
     end
     subgraph BLAST+
         quasispecies --> blast:::implemented
